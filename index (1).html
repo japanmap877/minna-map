@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>みんなで地図を埋めよう</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    background: #f0f4f8;
+    color: #1a2332;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #1a3a5c;
+    color: #fff;
+    padding: 0 20px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+
+  header h1 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .season-badge {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  .main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar { order: -1; }
+  }
+
+  .map-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .input-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px 16px;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .input-card input[type="text"] {
+    border: 1px solid #d1d9e0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #1a2332;
+    outline: none;
+    transition: border-color 0.2s;
+    background: #f8fafc;
+  }
+
+  .input-card input[type="text"]:focus {
+    border-color: #1a3a5c;
+    background: #fff;
+  }
+
+  #nick-input { width: 120px; }
+  #addr-input { flex: 1; min-width: 180px; }
+
+  .btn-add {
+    background: #1a3a5c;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-add:hover { background: #264d75; }
+  .btn-add:disabled { background: #94a3b8; cursor: not-allowed; }
+
+  .status-bar {
+    font-size: 13px;
+    color: #64748b;
+    min-height: 20px;
+    padding: 0 4px;
+  }
+
+  .status-bar.error { color: #dc2626; }
+  .status-bar.success { color: #16a34a; }
+
+  #map {
+    width: 100%;
+    height: 520px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+  }
+
+  @media (max-width: 768px) {
+    #map { height: 360px; }
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .stat-block {
+    padding: 14px 16px;
+  }
+
+  .stat-number {
+    font-size: 32px;
+    font-weight: 700;
+    color: #1a2332;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 4px;
+  }
+
+  .realtime-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    background: #16a34a;
+    border-radius: 50%;
+    margin-right: 4px;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .deadline-block {
+    padding: 14px 16px;
+  }
+
+  .deadline-date {
+    font-size: 13px;
+    color: #1a2332;
+    font-weight: 500;
+  }
+
+  .deadline-sub {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  .days-left {
+    margin-top: 10px;
+    background: #f0f4f8;
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+
+  .days-number {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1a3a5c;
+  }
+
+  .days-unit {
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  .list-wrap {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-bottom: 1px solid #f8fafc;
+    font-size: 12px;
+  }
+
+  .list-item:last-child { border-bottom: none; }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .list-nick {
+    font-weight: 600;
+    color: #1a2332;
+    flex-shrink: 0;
+    max-width: 70px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .list-addr {
+    color: #64748b;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .list-time {
+    color: #94a3b8;
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+
+  .empty-list {
+    padding: 20px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: #94a3b8;
+  }
+
+  .btn-refresh {
+    background: none;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: #64748b;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+
+  .btn-refresh:hover { background: #f8fafc; }
+
+  .map-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px;
+  }
+
+  .map-count {
+    font-size: 13px;
+    color: #64748b;
+  }
+
+  .search-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px 16px;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .search-card input[type="text"] {
+    border: 1px solid #d1d9e0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #1a2332;
+    outline: none;
+    transition: border-color 0.2s;
+    background: #f8fafc;
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .search-card input[type="text"]:focus {
+    border-color: #2e7d9e;
+    background: #fff;
+  }
+
+  .btn-search {
+    background: #2e7d9e;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-search:hover { background: #236080; }
+  .btn-search:disabled { background: #94a3b8; cursor: not-allowed; }
+
+  .search-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+  }
+
+  .search-results {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    display: none;
+  }
+
+  .search-results.visible { display: block; }
+
+  .search-results-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .btn-close-search {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+
+  .search-result-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-bottom: 1px solid #f8fafc;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .search-result-item:hover { background: #f0f4f8; }
+  .search-result-item:last-child { border-bottom: none; }
+
+  .search-result-item .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .registered-mark {
+    font-size: 10px;
+    background: #dcfce7;
+    color: #16a34a;
+    border-radius: 4px;
+    padding: 1px 6px;
+    flex-shrink: 0;
+    font-weight: 600;
+  }
+
+  .unregistered-mark {
+    font-size: 10px;
+    background: #f1f5f9;
+    color: #94a3b8;
+    border-radius: 4px;
+    padding: 1px 6px;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>みんなで地図を埋めよう</h1>
+  <span class="season-badge" id="season-label">第1期</span>
+</header>
+
+<div class="main">
+
+  <div class="map-section">
+    <div class="input-card">
+      <input type="text" id="nick-input" placeholder="ニックネーム（任意）" maxlength="20"/>
+      <input type="text" id="addr-input" placeholder="住所や場所名を入力（例：大阪府堺市〇〇町）"/>
+      <button class="btn-add" id="add-btn" onclick="addSpot()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        追加する
+      </button>
+    </div>
+    <div class="status-bar" id="status"></div>
+
+    <div class="search-card">
+      <span class="search-label">🔍 場所を検索</span>
+      <input type="text" id="search-input" placeholder="住所や場所名で検索（例：大阪府堺市〇〇町）"/>
+      <button class="btn-search" id="search-btn" onclick="searchSpot()">検索する</button>
+    </div>
+    <div class="status-bar" id="search-status"></div>
+
+    <div class="search-results" id="search-results">
+      <div class="search-results-header">
+        <span id="search-results-title">検索結果</span>
+        <button class="btn-close-search" onclick="closeSearch()">✕</button>
+      </div>
+      <div id="search-results-list"></div>
+    </div>
+
+    <div class="map-info">
+      <span class="map-count" id="map-count"></span>
+      <button class="btn-refresh" onclick="loadVisible()">↻ 更新</button>
+    </div>
+
+    <div id="map"></div>
+  </div>
+
+  <div class="sidebar">
+
+    <div class="card">
+      <div class="card-header">登録数</div>
+      <div class="stat-block">
+        <div class="stat-number" id="total-count">—</div>
+        <div class="stat-label">
+          <span class="realtime-dot"></span>リアルタイム同期中
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">期間</div>
+      <div class="deadline-block">
+        <div class="deadline-date" id="season-start">—</div>
+        <div class="deadline-sub">〜 <span id="season-end">—</span></div>
+        <div class="days-left">
+          <span class="days-number" id="days-left">—</span>
+          <span class="days-unit">日残り</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">最近の投稿</div>
+      <div class="list-wrap" id="recent-list">
+        <div class="empty-list">まだ投稿がありません</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+
+const SUPABASE_URL = 'https://hxryrssxzgorfvelnxzz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_xUz650oyvRNbkNxaVyWdXw_CXM24ZjW';
+const CURRENT_SEASON = 1;
+const SEASON_START = '2025-01-01';
+const SEASON_END   = '2025-03-31';
+
+const COLORS = ['#4A90D9','#E2553A','#2EAA6E','#9B59B6','#F39C12','#1ABC9C','#E91E63','#3F51B5','#FF7043','#00ACC1'];
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let map, layerGroup, recentItems = [];
+
+function initMap() {
+  map = L.map('map').setView([36.5, 136.0], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19
+  }).addTo(map);
+  layerGroup = L.layerGroup().addTo(map);
+  map.on('moveend', loadVisible);
+}
+
+function initSeason() {
+  document.getElementById('season-label').textContent = '第' + CURRENT_SEASON + '期';
+  const start = new Date(SEASON_START);
+  const end   = new Date(SEASON_END);
+  const now   = new Date();
+  const diff  = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+
+  document.getElementById('season-start').textContent =
+    start.getFullYear() + '年' + (start.getMonth()+1) + '月' + start.getDate() + '日';
+  document.getElementById('season-end').textContent =
+    end.getFullYear() + '年' + (end.getMonth()+1) + '月' + end.getDate() + '日';
+  document.getElementById('days-left').textContent = diff > 0 ? diff : '終了';
+}
+
+async function geocode(addr) {
+  const res = await fetch(
+    'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(addr) +
+    '&format=json&limit=1&accept-language=ja',
+    { headers: { 'User-Agent': 'MinnaMap/1.0' } }
+  );
+  const data = await res.json();
+  if (!data || !data.length) return null;
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+}
+
+async function addSpot() {
+  const addrEl = document.getElementById('addr-input');
+  const nickEl = document.getElementById('nick-input');
+  const btn    = document.getElementById('add-btn');
+  const status = document.getElementById('status');
+  const addr   = addrEl.value.trim();
+  const nick   = nickEl.value.trim() || '匿名';
+
+  if (!addr) { setStatus('場所を入力してください。', 'error'); return; }
+
+  btn.disabled = true;
+  setStatus('場所を検索中…', '');
+
+  const geo = await geocode(addr);
+  if (!geo) {
+    setStatus('場所が見つかりませんでした。もう少し詳しく入力してください。', 'error');
+    btn.disabled = false;
+    return;
+  }
+
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  const { error } = await sb.from('spots').insert({
+    addr, nick, color, lat: geo.lat, lon: geo.lon, season: CURRENT_SEASON
+  });
+
+  if (error) {
+    setStatus('エラーが発生しました: ' + error.message, 'error');
+  } else {
+    addrEl.value = '';
+    setStatus('「' + addr + '」を追加しました！', 'success');
+  }
+  btn.disabled = false;
+}
+
+async function loadVisible() {
+  const bounds = map.getBounds();
+  const { data, error } = await sb.from('spots')
+    .select('*')
+    .eq('season', CURRENT_SEASON)
+    .gte('lat', bounds.getSouth()).lte('lat', bounds.getNorth())
+    .gte('lon', bounds.getWest()).lte('lon', bounds.getEast())
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  if (error || !data) return;
+
+  layerGroup.clearLayers();
+  data.forEach(addToMap);
+
+  document.getElementById('map-count').textContent =
+    '表示中: ' + data.length + ' 件';
+}
+
+async function loadTotalCount() {
+  const { count } = await sb.from('spots')
+    .select('*', { count: 'exact', head: true })
+    .eq('season', CURRENT_SEASON);
+  document.getElementById('total-count').textContent =
+    count !== null ? count.toLocaleString() : '—';
+}
+
+async function loadRecent() {
+  const { data } = await sb.from('spots')
+    .select('*')
+    .eq('season', CURRENT_SEASON)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (!data) return;
+  recentItems = data;
+  renderRecentList();
+}
+
+function renderRecentList() {
+  const el = document.getElementById('recent-list');
+  if (!recentItems.length) {
+    el.innerHTML = '<div class="empty-list">まだ投稿がありません<br>最初の一人になろう！</div>';
+    return;
+  }
+  el.innerHTML = recentItems.map(e => {
+    const d = new Date(e.created_at);
+    const time = (d.getMonth()+1) + '/' + d.getDate() + ' ' +
+      String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    return '<div class="list-item">' +
+      '<span class="dot" style="background:' + e.color + '"></span>' +
+      '<span class="list-nick">' + esc(e.nick) + '</span>' +
+      '<span class="list-addr">' + esc(e.addr) + '</span>' +
+      '<span class="list-time">' + time + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+function addToMap(e) {
+  L.circle([e.lat, e.lon], {
+    radius: 25,
+    color: e.color,
+    fillColor: e.color,
+    fillOpacity: 0.38,
+    weight: 2
+  })
+  .bindPopup('<b>' + esc(e.nick) + '</b><br>' + esc(e.addr) + '<br><small>' +
+    new Date(e.created_at).toLocaleString('ja-JP') + '</small>')
+  .addTo(layerGroup);
+
+  L.circleMarker([e.lat, e.lon], {
+    radius: 4, color: e.color, fillColor: '#fff', fillOpacity: 1, weight: 2
+  }).addTo(layerGroup);
+}
+
+function setupRealtime() {
+  sb.channel('spots-live')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'spots' }, payload => {
+      const e = payload.new;
+      if (e.season !== CURRENT_SEASON) return;
+      addToMap(e);
+      recentItems.unshift(e);
+      if (recentItems.length > 20) recentItems.pop();
+      renderRecentList();
+      loadTotalCount();
+    })
+    .subscribe();
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status-bar' + (type ? ' ' + type : '');
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+document.getElementById('addr-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addSpot();
+});
+
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchSpot();
+});
+
+async function searchSpot() {
+  const input = document.getElementById('search-input');
+  const btn   = document.getElementById('search-btn');
+  const status = document.getElementById('search-status');
+  const query = input.value.trim();
+  if (!query) { status.textContent = '検索する住所を入力してください。'; return; }
+
+  btn.disabled = true;
+  status.textContent = '検索中…';
+
+  // まず地図上の座標に変換
+  const geo = await geocode(query);
+  if (!geo) {
+    status.textContent = '場所が見つかりませんでした。';
+    btn.disabled = false;
+    return;
+  }
+
+  // 地図をその場所に移動
+  map.setView([geo.lat, geo.lon], 16);
+
+  // データベースから近くの登録済みスポットを検索（±0.001度 ≒ 約100m以内）
+  const range = 0.001;
+  const { data } = await sb.from('spots')
+    .select('*')
+    .eq('season', CURRENT_SEASON)
+    .gte('lat', geo.lat - range).lte('lat', geo.lat + range)
+    .gte('lon', geo.lon - range).lte('lon', geo.lon + range)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  const resultsEl = document.getElementById('search-results');
+  const listEl    = document.getElementById('search-results-list');
+  const titleEl   = document.getElementById('search-results-title');
+  resultsEl.classList.add('visible');
+
+  if (!data || data.length === 0) {
+    titleEl.textContent = '「' + query + '」付近：登録なし';
+    listEl.innerHTML = '<div style="padding:16px;text-align:center;font-size:13px;color:#94a3b8;">この付近にはまだ登録がありません</div>';
+    status.textContent = '地図を「' + query + '」付近に移動しました。';
+  } else {
+    titleEl.textContent = '「' + query + '」付近：' + data.length + '件見つかりました';
+    listEl.innerHTML = data.map(e => {
+      const d = new Date(e.created_at);
+      const time = (d.getMonth()+1) + '/' + d.getDate();
+      return '<div class="search-result-item" onclick="jumpToSpot(' + e.lat + ',' + e.lon + ')">' +
+        '<span class="dot" style="background:' + e.color + '"></span>' +
+        '<span class="registered-mark">登録済み</span>' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#1a2332;">' + esc(e.addr) + '</span>' +
+        '<span style="font-size:11px;color:#64748b;flex-shrink:0;">' + esc(e.nick) + ' · ' + time + '</span>' +
+        '</div>';
+    }).join('');
+    status.textContent = '地図を「' + query + '」付近に移動しました。';
+  }
+
+  btn.disabled = false;
+}
+
+function jumpToSpot(lat, lon) {
+  map.setView([lat, lon], 18);
+}
+
+function closeSearch() {
+  document.getElementById('search-results').classList.remove('visible');
+  document.getElementById('search-status').textContent = '';
+}
+
+initMap();
+initSeason();
+loadVisible();
+loadTotalCount();
+loadRecent();
+setupRealtime();
+
+</script>
+</body>
+</html>
